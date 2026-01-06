@@ -1,126 +1,143 @@
-# ATLEAST GIVE CREDITS IF YOU STEALING :(((((((((((((((((((((((((((((((((((((
-# ELSE NO FURTHER PUBLIC THUMBNAIL UPDATES
-
 import os
 import re
-import random
 
 import aiofiles
 import aiohttp
+import numpy as np
 from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
-from py_yt import VideosSearch
+from unidecode import unidecode
+from ytSearch import VideosSearch
 
+from AnonXMusic import app
 from config import YOUTUBE_IMG_URL
 
 
-def truncate(text, max_len=30):
-    words = text.split()
-    lines = ["", ""]
-    i = 0
-    for word in words:
-        if len(lines[i]) + len(word) + 1 <= max_len:
-            lines[i] += (" " if lines[i] else "") + word
-        elif i == 0:
-            i = 1
+def changeImageSize(maxWidth, maxHeight, image):
+    widthRatio = maxWidth / image.size[0]
+    heightRatio = maxHeight / image.size[1]
+    newWidth = int(widthRatio * image.size[0])
+    newHeight = int(heightRatio * image.size[1])
+    newImage = image.resize((newWidth, newHeight))
+    return newImage
 
-    return lines
-
-def random_color():
-    return tuple(random.randint(0, 255) for _ in range(3))
-
-def circular_crop(img, size, border, color, scale=1.5):
-    inner = size - 2 * border
-    crop = int(size * scale)
-    w, h = img.size
-    img = img.crop((w//2-crop//2, h//2-crop//2, w//2+crop//2, h//2+crop//2))
-    img = img.resize((inner, inner), Image.LANCZOS)
-
-    out = Image.new("RGBA", (size, size), color)
-    mask = Image.new("L", (inner, inner), 0)
-    ImageDraw.Draw(mask).ellipse((0, 0, inner, inner), 255)
-    out.paste(img, (border, border), mask)
-
-    outer = Image.new("L", (size, size), 0)
-    ImageDraw.Draw(outer).ellipse((0, 0, size, size), 255)
-    out.putalpha(outer)
-    return out
-
-def draw_text(draw, pos, text, font, fill):
-    x, y = pos
-    draw.text((x+2, y+2), text, font=font, fill="black")
-    draw.text(pos, text, font=font, fill=fill)
-
-def gen_gradient(size, start, end):
-    base = Image.new("RGBA", size, start)
-    top = Image.new("RGBA", size, end)
-    mask = Image.linear_gradient("L").resize(size)
-    base.paste(top, (0, 0), mask)
-    return base
+def circle(img): 
+     h,w=img.size 
+     a = Image.new('L', [h,w], 0) 
+     b = ImageDraw.Draw(a) 
+     b.pieslice([(0, 0), (h,w)], 0, 360, fill = 255,outline = "white") 
+     c = np.array(img) 
+     d = np.array(a) 
+     e = np.dstack((c, d)) 
+     return Image.fromarray(e)
 
 
-async def gen_thumb(videoid: str, thumb_size=(1280, 720)):
-    path = f"cache/{videoid}.png"
-    if os.path.isfile(path):
-        return path
+def clear(text):
+    list = text.split(" ")
+    title = ""
+    for i in list:
+        if len(title) + len(i) < 60:
+            title += " " + i
+    return title.strip()
+
+
+async def get_thumb(videoid,user_id):
+    if os.path.isfile(f"cache/{videoid}_{user_id}.png"):
+        return f"cache/{videoid}_{user_id}.png"
+
+    url = f"https://www.youtube.com/watch?v={videoid}"
     try:
-        url = f"https://www.youtube.com/watch?v={videoid}"
-        results = VideosSearch(url, limit=1, with_live=False)
-        data = (await results.next())["result"][0]
-        title = re.sub(r"\W+", " ", data.get("title", "Unsupported Title")).title()
-        duration = data.get("duration") or "00:00"
-        views = data.get("viewCount", {}).get("short", "Unknown Views")
-        channel = data.get("channel", {}).get("name", "Unknown Channel")
-        thumb_url = data["thumbnails"][0]["url"].split("?")[0]
-        
+        results = VideosSearch(url, limit=1)
+        for result in (await results.next())["result"]:
+            try:
+                title = result["title"]
+                title = re.sub("\W+", " ", title)
+                title = title.title()
+            except:
+                title = "Unsupported Title"
+            try:
+                duration = result["duration"]
+            except:
+                duration = "Unknown Mins"
+            thumbnail = result["thumbnails"][0]["url"].split("?")[0]
+            try:
+                views = result["viewCount"]["short"]
+            except:
+                views = "Unknown Views"
+            try:
+                channel = result["channel"]["name"]
+            except:
+                channel = "Unknown Channel"
+
         async with aiohttp.ClientSession() as session:
-            async with session.get(thumb_url) as resp:
-                content = await resp.read()
+            async with session.get(thumbnail) as resp:
+                if resp.status == 200:
+                    f = await aiofiles.open(f"cache/thumb{videoid}.png", mode="wb")
+                    await f.write(await resp.read())
+                    await f.close()
+        try:
+            async for photo in app.get_chat_photos(user_id,1):
+                sp=await app.download_media(photo.file_id, file_name=f'{user_id}.jpg')
+        except:
+            async for photo in app.get_chat_photos(app.id,1):
+                sp=await app.download_media(photo.file_id, file_name=f'{app.id}.jpg')
 
-        temp_path = f"cache/thumb_{videoid}.png"
-        async with aiofiles.open(temp_path, "wb") as f:
-            await f.write(content)
+        xp=Image.open(sp)
 
-        base_img = Image.open(temp_path).convert("RGBA")
-        base_img.thumbnail(thumb_size, Image.Resampling.LANCZOS)
-
-        bg = base_img.filter(ImageFilter.BoxBlur(20))
-        bg = ImageEnhance.Brightness(bg).enhance(0.6)
-        grad = gen_gradient(thumb_size, random_color(), random_color())
-        bg = Image.blend(bg, grad, 0.2)
-
-        draw = ImageDraw.Draw(bg)
-        font_small = ImageFont.truetype("AviaxMusic/assets/font2.ttf", 30)
-        font_title = ImageFont.truetype("AviaxMusic/assets/font3.ttf", 45)
-
-        circle = circular_crop(base_img, 400, 20, random_color())
-        circle.show()
-        bg.paste(circle, (120, 160), circle)
-
-        x, y = 565, 380
-        t1, t2 = truncate(title)
-
-        draw_text(draw, (x, 180), t1, font_title, "white")
-        draw_text(draw, (x, 230), t2, font_title, "white")
-        draw_text(draw, (x, 320), f"{channel} | {views[:23]}", font_small, "white")
-
-        pct = random.uniform(0.15, 0.85)
-        color_len = int(580 * pct)
-        color = random_color()
-
-        draw.line((x, y, x + color_len, y), fill=color, width=9)
-        draw.line((x + color_len, y, x + 580, y), fill="white", width=8)
-        draw.ellipse((x + color_len - 10, y - 10, x + color_len + 10, y + 10), fill=color)
-
-        draw_text(draw, (x, 400), "00:00", font_small, "white")
-        draw_text(draw, (1080, 400), duration, font_small, "white")
-
-        icons = Image.open("AviaxMusic/assets/play_icons.png").convert("RGBA")
-        bg.paste(icons, (x, 450), icons)
-        bg.save(path)
-
-        os.remove(temp_path)
-        return path
-
-    except Exception as ex:
-        print(ex)
+        youtube = Image.open(f"cache/thumb{videoid}.png")
+        image1 = changeImageSize(1280, 720, youtube)
+        image2 = image1.convert("RGBA")
+        background = image2.filter(filter=ImageFilter.BoxBlur(10))
+        enhancer = ImageEnhance.Brightness(background)
+        background = enhancer.enhance(0.5)
+        y=changeImageSize(200,200,circle(youtube)) 
+        background.paste(y,(45,225),mask=y)
+        a=changeImageSize(200,200,circle(xp)) 
+        background.paste(a,(1045,225),mask=a)
+        draw = ImageDraw.Draw(background)
+        arial = ImageFont.truetype("AnonXMusic/assets/font2.ttf", 30)
+        font = ImageFont.truetype("AnonXMusic/assets/font.ttf", 30)
+        draw.text((1110, 8), unidecode(app.name), fill="white", font=arial)
+        draw.text(
+                (55, 560),
+                f"{channel} | {views[:23]}",
+                (255, 255, 255),
+                font=arial,
+            )
+        draw.text(
+                (57, 600),
+                clear(title),
+                (255, 255, 255),
+                font=font,
+            )
+        draw.line(
+                [(55, 660), (1220, 660)],
+                fill="white",
+                width=5,
+                joint="curve",
+            )
+        draw.ellipse(
+                [(918, 648), (942, 672)],
+                outline="white",
+                fill="white",
+                width=15,
+            )
+        draw.text(
+                (36, 685),
+                "00:00",
+                (255, 255, 255),
+                font=arial,
+            )
+        draw.text(
+                (1185, 685),
+                f"{duration[:23]}",
+                (255, 255, 255),
+                font=arial,
+            )
+        try:
+            os.remove(f"cache/thumb{videoid}.png")
+        except:
+            pass
+        background.save(f"cache/{videoid}_{user_id}.png")
+        return f"cache/{videoid}_{user_id}.png"
+    except Exception:
         return YOUTUBE_IMG_URL
