@@ -1,15 +1,18 @@
+import os
 import aiofiles
 import aiohttp
-import numpy as np
-from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
-from unidecode import unidecode
-from ytSearch import VideosSearch
+import asyncio
+from functools import partial
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
+from youtubesearchpython.__future__ import VideosSearch
+from collections import Counter
+from config import YOUTUBE_IMG_URL
 
 CACHE_DIR = "cache"
 os.makedirs(CACHE_DIR, exist_ok=True)
 
-TITLE_FONT_PATH = "AnonXMusic/assets/font2.ttf"
-META_FONT_PATH = "AnonXMusic/assets/font.ttf"
+TITLE_FONT_PATH = "src/assets/font2.ttf"
+META_FONT_PATH = "src/assets/font.ttf"
 
 def load_font(path, size: int):
     try:
@@ -218,6 +221,4 @@ async def get_thumb(videoid: str) -> str:
         os.remove(thumb_path)
     except OSError:
         pass
-
     return cache_path
-
