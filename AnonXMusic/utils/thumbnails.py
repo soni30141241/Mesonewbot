@@ -1,12 +1,9 @@
-import os
 import aiofiles
 import aiohttp
-import asyncio
-from functools import partial
-from PIL import Image, ImageDraw, ImageFilter, ImageFont
-from youtubesearchpython.__future__ import VideosSearch
-from collections import Counter
-from config import YOUTUBE_IMG_URL
+import numpy as np
+from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
+from unidecode import unidecode
+from ytSearch import VideosSearch
 
 CACHE_DIR = "cache"
 os.makedirs(CACHE_DIR, exist_ok=True)
@@ -223,3 +220,4 @@ async def get_thumb(videoid: str) -> str:
         pass
 
     return cache_path
+
