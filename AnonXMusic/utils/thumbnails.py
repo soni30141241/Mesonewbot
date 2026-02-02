@@ -4,8 +4,8 @@ import aiohttp
 import asyncio
 from functools import partial
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
-from youtubesearchpython.__future__ import VideosSearch
-from collections import Counter
+from unidecode import unidecode
+from ytSearch import VideosSearch
 from config import YOUTUBE_IMG_URL
 
 CACHE_DIR = "cache"
@@ -223,4 +223,5 @@ async def get_thumb(videoid,user_id):
         pass
 
     return cache_path
+
 
